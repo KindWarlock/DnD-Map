@@ -2,22 +2,17 @@ package com.example.dndmap
 
 
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
 import android.graphics.PointF
-import android.graphics.Rect
-import android.graphics.RectF
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.*
+import androidx.annotation.RequiresApi
 import androidx.core.view.GestureDetectorCompat
-import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.ViewModel
 import com.example.dndmap.databinding.FragmentMapBinding
-import com.example.dndmap.ui.MapViewModel
-import android.view.WindowMetrics
 import com.squareup.picasso.Picasso
+
 
 class MapFragment : Fragment(),
     GestureDetector.OnGestureListener {
@@ -26,13 +21,60 @@ class MapFragment : Fragment(),
     private val binding get() = _binding!!
 
     lateinit var mDetector: GestureDetectorCompat
-    lateinit var mScaleDetector: ScaleGestureDetector
 
     var mScaleFactor = 1F
+    var mPivotX = 0F
+    var mPivotY = 0F
 
-    var fogMode = false
+
+    private var fogMode = FogMode.NONE
     var scaling = false
-//    val viewModel: MapViewModel by activityViewModels()
+
+    private enum class FogMode {
+        DRAWING,
+        ERASING,
+        NONE
+    }
+    private val scaleGestureDetector by lazy {
+        activity?.let {
+            ScaleGestureDetector(it, object : ScaleGestureDetector.OnScaleGestureListener {
+
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+//                    Log.d("TAG", "Scale ")
+
+                    if (mScaleFactor * detector.scaleFactor < 1) {
+                        return true
+                    }
+                    mScaleFactor *= detector.scaleFactor
+                    binding.trueRoot.scaleY = mScaleFactor
+                    binding.trueRoot.scaleX = mScaleFactor
+                    binding.trueRoot.invalidate()
+                    return true
+                }
+
+                override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+//                    Log.d("TAG", "Scale begin")
+                    scaling = true
+                    binding.trueRoot.run {
+                        val actualPivot = PointF(
+                            (detector.focusX - translationX + pivotX * (mScaleFactor - 1)) / mScaleFactor,
+                            (detector.focusY - translationY + pivotY * (mScaleFactor - 1)) / mScaleFactor,
+                        )
+                        translationX -= (pivotX - actualPivot.x) * (mScaleFactor - 1)
+                        translationY -= (pivotY - actualPivot.y) * (mScaleFactor - 1)
+                        pivotX = actualPivot.x
+                        pivotY = actualPivot.y
+                        mPivotX = pivotX
+                        mPivotY = pivotY
+
+                    }
+                    return true
+                }
+
+                override fun onScaleEnd(detector: ScaleGestureDetector) = Unit
+            })
+        }
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreateView(
@@ -48,23 +90,23 @@ class MapFragment : Fragment(),
             }
         }
         mDetector = GestureDetectorCompat(requireContext(), this)
-        mScaleDetector = ScaleGestureDetector(requireContext(), scaleListener)
-        Picasso.get().load(R.drawable.mapexample).resize(5000, 0).into(binding.backgroundImage)
-        Log.d("TAG", "Image loading")
+        Picasso.get().load(R.drawable.mapexample).fit().centerInside().into(binding.backgroundImage)
 
         binding.root.setOnTouchListener { view, event ->
-            if (event.action == MotionEvent.ACTION_MOVE && fogMode) {
+            if (event.action == MotionEvent.ACTION_MOVE && (fogMode != FogMode.NONE)) {
                 val cancel = MotionEvent.obtain(event)
                 cancel.action = MotionEvent.ACTION_CANCEL
                 mDetector.onTouchEvent(cancel)
             }
 
             if (event.action == MotionEvent.ACTION_UP) {
-                fogMode = false
+                fogMode = FogMode.NONE
                 scaling = false
             }
-
-            if (mDetector.onTouchEvent(event) || mScaleDetector.onTouchEvent(event)) {
+            if (scaling || event.pointerCount > 1) {
+                scaleGestureDetector!!.onTouchEvent(event)
+            } else
+            if (mDetector.onTouchEvent(event)) {
                 true
             } else {
                 binding.root.onTouchEvent(event)
@@ -75,16 +117,21 @@ class MapFragment : Fragment(),
 
 
     override fun onDown(event: MotionEvent): Boolean {
-//        mx = event.x
-//          my = event.y
-          return true
+        return true
     }
 
     override fun onLongPress(event: MotionEvent) {
-//        Log.d("TAG", "Long press? $event")
-//        binding.grid.dispatchTouchEvent(event)
-//        Log.d("TAG", "Long press in fragment!") // first this, in view second
-        fogMode = true
+        // TODO
+        val paddings = getPaddings()
+        Log.d("TAG", "Long press")
+        fogMode = if (binding.grid.checkFog(paddings[0] + event.x - binding.trueRoot.translationX,
+                event.y + paddings[1] - binding.trueRoot.translationY, mScaleFactor))
+            FogMode.ERASING
+        else{
+            Log.d("TAG", "Drawing")
+            FogMode.DRAWING
+        }
+//        drawFog(event.x, event.y)
     }
 
     override fun onShowPress(event: MotionEvent) {
@@ -92,7 +139,6 @@ class MapFragment : Fragment(),
     }
 
     override fun onSingleTapUp(event: MotionEvent): Boolean {
-//        Log.d("TAG", "x: ${event.x}, y: ${event.y}, left: ${binding.hScroll.scrollX}")
         return true
     }
 
@@ -102,7 +148,9 @@ class MapFragment : Fragment(),
                           distanceY: Float): Boolean {
 //        if (scaling)
 //            return true
-        if (!fogMode) {
+//        scroll(distanceX, distanceY)
+
+        if (fogMode == FogMode.NONE) {
             scroll(distanceX, distanceY)
         } else {
             drawFog(event1.x, event1.y)
@@ -117,48 +165,55 @@ class MapFragment : Fragment(),
         return true
     }
 
-
-    private val scaleListener = object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-        override fun onScale(sDetector: ScaleGestureDetector): Boolean {
-//            Log.d("tag", "Scaling")
-            mScaleFactor *= sDetector.scaleFactor
-
-            // Don't let the object get too small or too large.
-            mScaleFactor = Math.max(0.1f, Math.min(mScaleFactor, 5.0f))
-            binding.trueRoot.scaleY = mScaleFactor
-            binding.trueRoot.scaleX = mScaleFactor
-            binding.trueRoot.invalidate()
-
-            return true
-        }
-
-        override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
-            Log.d("tag", "Scaling begin")
-            Log.d("tag", "ScrollX: ${binding.hScroll.scrollX}, scrollY:${binding.vScroll.scrollY}")
-
-            binding.trueRoot.pivotY = detector.focusY + binding.vScroll.scrollY
-            binding.trueRoot.pivotX = detector.focusX + binding.hScroll.scrollX
-            scaling = true
-
-            return true
-        }
-    }
-
-
+    @SuppressLint("InternalInsetResource")
+    @RequiresApi(Build.VERSION_CODES.R)
     fun scroll(distanceX: Float, distanceY: Float) {
-        binding.vScroll.scrollBy((distanceX).toInt(), (distanceY).toInt())
-        binding.hScroll.scrollBy((distanceX).toInt(), (distanceY).toInt())
+        binding.trueRoot.run {
+            val imageWidth = binding.backgroundImage.drawable.intrinsicWidth
+            val imageHeight = binding.backgroundImage.drawable.intrinsicHeight
+
+            var navigationBarHeight = 0
+            var resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+            if (resourceId > 0) {
+                navigationBarHeight = resources.getDimensionPixelSize(resourceId)
+            }
+
+            val leftBorder = mPivotX * mScaleFactor - mPivotX
+            val rightBorder = imageWidth * mScaleFactor - (imageWidth + leftBorder) // Scaled width - width - border
+            val topBorder = mPivotY * mScaleFactor - mPivotY
+            val bottomBorder = imageHeight * mScaleFactor - (imageHeight + topBorder)
+
+            if (translationX - leftBorder <= distanceX
+                && -translationX + distanceX <= imageWidth - (requireActivity().window.decorView.width) + rightBorder)
+                translationX -= distanceX
+            if (translationY - topBorder <= distanceY
+                && -translationY + distanceY <= imageHeight - (requireActivity().windowManager.defaultDisplay.height) + navigationBarHeight + bottomBorder)
+                translationY -= distanceY
+        }
+//        Log.d("tag", "Scrolling")
     }
 
     fun drawFog(x: Float, y: Float) {
-        Log.d("TAG", "mScaleFactor: $mScaleFactor, " +
-                "scrollX: ${binding.hScroll.scrollX}, " +
-                "scrollY: ${binding.vScroll.scrollY}, " +
-                "x: $x, y: $y")
-        binding.grid.addFog((x + binding.hScroll.scrollX) / mScaleFactor,
-            (y + binding.vScroll.scrollY) / mScaleFactor,
-            mScaleFactor)
+//        binding.grid.addFog((x + binding.hScroll.scrollX) / mScaleFactor,
+//            (y + binding.vScroll.scrollY) / mScaleFactor,
+//            mScaleFactor)
+        val paddings = getPaddings()
+        if (fogMode == FogMode.DRAWING){
+            binding.grid.addFog(x - binding.trueRoot.translationX + paddings[0], y - binding.trueRoot.translationY + paddings[1], mScaleFactor)}
+        else
+            binding.grid.removeFog(x - binding.trueRoot.translationX + paddings[0], y - binding.trueRoot.translationY + paddings[1], mScaleFactor)
         binding.grid.invalidate()
+    }
+
+    private fun getPaddings() : FloatArray {
+        val imageWidth = binding.backgroundImage.drawable.intrinsicWidth
+        val imageHeight = binding.backgroundImage.drawable.intrinsicHeight
+
+        val leftPadding = mPivotX * mScaleFactor - mPivotX
+        val rightPadding = imageWidth * mScaleFactor - (imageWidth + leftPadding) // Scaled width - width - border
+        val topPadding = mPivotY * mScaleFactor - mPivotY
+        val bottomPadding = imageHeight * mScaleFactor - (imageHeight + topPadding)
+        return floatArrayOf(leftPadding, topPadding, rightPadding, bottomPadding)
     }
 }
 

@@ -54,7 +54,7 @@ GestureDetector.OnGestureListener {
         paint.style = Paint.Style.STROKE
         paint.color = Color.GRAY
         paint.isAntiAlias = true
-        paint.strokeWidth = 10F
+        paint.strokeWidth = 3F
 
         paintFog.style = Paint.Style.FILL
         paintFog.color = Color.BLACK
@@ -82,12 +82,15 @@ GestureDetector.OnGestureListener {
         for (pos in fog) {
             drawFog(pos)
         }
+        Log.d("TAG", "$fog")
     }
 
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = (parent as View).width
         val height = (parent as View).height
+//        val width = 100
+//        val height = 100
         setMeasuredDimension(width, height)
         for (child in children) {
             measureChild(child, widthMeasureSpec, heightMeasureSpec)
@@ -171,14 +174,29 @@ GestureDetector.OnGestureListener {
     }
 
     fun addFog(x: Float, y: Float, scaleFactor: Float) {
-        //TODO: check if exists. make a set?
-        fog.add(coords2pos(x, y, scaleFactor))
+        //TODO: make a set?
+
+        if (!checkFog(x, y, scaleFactor))
+            fog.add(coords2pos(x, y, scaleFactor))
+    }
+
+    fun removeFog(x: Float, y: Float, scaleFactor: Float) {
+        fog.remove(coords2pos(x, y, scaleFactor))
     }
 
     fun coords2pos(x: Float, y: Float, scaleFactor: Float) : Pos {
         this.scaleFactor = scaleFactor
 
-//        Log.d("TAG", "$squareSize, $scaleFactor, x: ${x /( squareSize / scaleFactor)}")
-        return Pos((x / (squareSize / scaleFactor)).toInt(), (y / (squareSize / scaleFactor)).toInt())
+        return Pos((x / squareSize / scaleFactor ).toInt(), (y / squareSize / scaleFactor).toInt())
+    }
+
+    fun checkFog(x: Float, y: Float, scaleFactor: Float): Boolean {
+        fog.forEach {
+            val pos = coords2pos(x, y, scaleFactor)
+            if (it.x == pos.x && it.y == pos.y){
+                return true
+            }
+        }
+        return false
     }
 }
