@@ -4,24 +4,20 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PointF
 import android.util.AttributeSet
 import android.util.Log
 import android.view.*
 import android.widget.FrameLayout
-import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.view.GestureDetectorCompat
-import androidx.core.view.MotionEventCompat
 import androidx.core.view.children
-import com.example.dndmap.MapFragment
 import com.example.dndmap.R
 import com.example.dndmap.data.Pos
-import com.example.dndmap.ui.MapViewModel
 import kotlin.math.ceil
 
 class MapGridView @JvmOverloads constructor(context: Context,
                   attrs: AttributeSet? = null,
-                  defStyleAttr: Int = 0) : FrameLayout(context, attrs, defStyleAttr),
-GestureDetector.OnGestureListener {
+                  defStyleAttr: Int = 0) : FrameLayout(context, attrs, defStyleAttr) {
 
     var mapSize = Pos(0, 0)
     var squareSize: Int
@@ -31,9 +27,11 @@ GestureDetector.OnGestureListener {
     val fog = arrayListOf<Pos>() //TODO to viewModel?
     lateinit var viewCanvas: Canvas
 
-    var scaleFactor = 1F
+//    var mScaleFactor = 1F
     lateinit var mDetector: GestureDetectorCompat
+    private lateinit var mParent : View
 
+    var scaleMode = false
     init {
         setWillNotDraw(false)
         context.obtainStyledAttributes(
@@ -50,7 +48,7 @@ GestureDetector.OnGestureListener {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        mDetector = GestureDetectorCompat(context, this)
+        mParent = (parent as View)
         paint.style = Paint.Style.STROKE
         paint.color = Color.GRAY
         paint.isAntiAlias = true
@@ -64,9 +62,13 @@ GestureDetector.OnGestureListener {
 
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
-        viewCanvas = canvas!!
-        mapSize.x = ceil(width / squareSize.toDouble()).toInt()
-        mapSize.y = ceil(height / squareSize.toFloat()).toInt()
+//        viewCanvas = canvas!!
+        // TODO: oh, really?
+        if (canvas == null) {
+            return
+        }
+        mapSize.x = ceil(width/ squareSize.toDouble()).toInt()
+        mapSize.y = ceil(height/ squareSize.toFloat()).toInt()
 
 
         for (x in 0 .. mapSize.x) {
@@ -79,22 +81,34 @@ GestureDetector.OnGestureListener {
             val posX = mapSize.x * squareSize.toFloat()
             canvas.drawLine(0F, posY, posX, posY, paint)
         }
-        for (pos in fog) {
-            drawFog(pos)
-        }
+
         Log.d("TAG", "$fog")
     }
 
-
+    override fun onDrawForeground(canvas: Canvas?) {
+        super.onDrawForeground(canvas)
+        viewCanvas = canvas!!
+        for (pos in fog) {
+            drawFog(pos)
+        }
+    }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = (parent as View).width
-        val height = (parent as View).height
+        val width = (parent as View).width * 4
+        val height = (parent as View).height * 4
 //        val width = 100
 //        val height = 100
         setMeasuredDimension(width, height)
         for (child in children) {
             measureChild(child, widthMeasureSpec, heightMeasureSpec)
         }
+//        scaleX = 0.7F
+//        scaleY = 0.7F
+        pivotX = 0F
+        pivotY = 0F
+        translationY = -(height / 2).toFloat()
+        translationX = -(width / 2).toFloat()
+//        translationX = 0F
+//        translationY = 0F
     }
 
 
@@ -104,68 +118,8 @@ GestureDetector.OnGestureListener {
         }
     }
 
-//    private val scaleListener = object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-//
-//        override fun onScale(sDetector: ScaleGestureDetector): Boolean {
-//            scaleFactor *= sDetector.scaleFactor
-//            // Don't let the object get too small or too large.
-//            scaleFactor = Math.max(0.1f, Math.min(scaleFactor, 5.0f))
-//
-//            invalidate()
-//            return true
-//        }
-//    }
-//    private val mScaleDetector = ScaleGestureDetector(context, scaleListener)
-
-    override fun onTouchEvent(event: MotionEvent?): Boolean {
-////        Log.d("TAG", "$event")
-//        if (event?.action == MotionEvent.ACTION_CANCEL) {
-//            val move = MotionEvent.obtain(event)
-//            move.action = MotionEvent.ACTION_MOVE
-//            super.onTouchEvent(move)
-//        }
-
-//        return if ((event != null) && mScaleDetector.onTouchEvent(event)) {
-//            true
-//        } else {
-//            super.onTouchEvent(event)
-//        }
-
-        return super.onTouchEvent(event)
-
-    }
-
-    override fun onDown(event: MotionEvent): Boolean {
-        return false
-    }
-
-    override fun onLongPress(event: MotionEvent) {
-        return
-    }
-
-    override fun onShowPress(event: MotionEvent) {
-        return
-    }
-
-    override fun onSingleTapUp(event: MotionEvent): Boolean {
-        return true
-    }
-
-    override fun onScroll(event0: MotionEvent,
-                          event1: MotionEvent,
-                          distanceX: Float,
-                          distanceY: Float): Boolean {
-        return false
-    }
-
-    override fun onFling(event0: MotionEvent,
-                         event1: MotionEvent,
-                         distanceX: Float,
-                         distanceY: Float): Boolean{
-        return false
-    }
-
     private fun drawFog(pos: Pos) {
+        // TODO: перенести расчет ширины сетки в ondraw
         val left = pos.x * squareSize + paint.strokeWidth / 2
         val top = pos.y * squareSize + paint.strokeWidth / 2
         val right = (pos.x + 1) * squareSize - paint.strokeWidth / 2
@@ -173,30 +127,78 @@ GestureDetector.OnGestureListener {
         viewCanvas.drawRect(left, top, right, bottom, paintFog)
     }
 
-    fun addFog(x: Float, y: Float, scaleFactor: Float) {
+    fun addFog(x: Float, y: Float) {
         //TODO: make a set?
 
-        if (!checkFog(x, y, scaleFactor))
-            fog.add(coords2pos(x, y, scaleFactor))
+        if (!checkFog(x, y))
+            fog.add(coords2pos(x, y))
     }
 
-    fun removeFog(x: Float, y: Float, scaleFactor: Float) {
-        fog.remove(coords2pos(x, y, scaleFactor))
+    fun removeFog(x: Float, y: Float) {
+        fog.remove(coords2pos(x, y))
     }
 
-    fun coords2pos(x: Float, y: Float, scaleFactor: Float) : Pos {
-        this.scaleFactor = scaleFactor
+    private fun coords2pos(x: Float, y: Float) : Pos {
+//        this.scaleFactor = scaleFactor
 
-        return Pos((x / squareSize / scaleFactor ).toInt(), (y / squareSize / scaleFactor).toInt())
+//        Log.d("TAG", "x: $x, " +
+//                "y: $y, " +
+//                "translationX: ${translationX}, " +
+//                "translationY: ${translationY}, " +
+//                "scaleX: $scaleX, " +
+//                "squareSize: $squareSize")
+        val paddings = getPaddings()
+        val posX = ((x - translationX + paddings[0]) / scaleX / squareSize ).toInt()
+        val posY = ((y - translationY + paddings[1]) / scaleY / squareSize ).toInt()
+        Log.d("TAG", "posX: $posX, posY: $posY")
+        return Pos(posX, posY)
     }
 
-    fun checkFog(x: Float, y: Float, scaleFactor: Float): Boolean {
+    fun checkFog(x: Float, y: Float): Boolean {
         fog.forEach {
-            val pos = coords2pos(x, y, scaleFactor)
+            val pos = coords2pos(x, y)
             if (it.x == pos.x && it.y == pos.y){
                 return true
             }
         }
         return false
+    }
+    fun scaleBegin(focusX: Float, focusY: Float) {
+        // TODO: fix pivot on scaled parent
+        val actualPivot = PointF(
+            (focusX - mParent.translationX - translationX + pivotX * (scaleX - 1)) / scaleX,
+            (focusY - mParent.translationY - translationY + pivotY * (scaleY - 1)) / scaleY,
+        )
+        translationX -= (pivotX - actualPivot.x) * (scaleX - 1)
+        translationY -= (pivotY - actualPivot.y) * (scaleY - 1)
+        pivotX = actualPivot.x
+        pivotY = actualPivot.y
+    }
+    fun scale(scaleFactor: Float) {
+        scaleY *= scaleFactor
+        scaleX *= scaleFactor
+        invalidate()
+    }
+    fun scroll(distanceX: Float, distanceY: Float) {
+        val leftBorder = pivotX * scaleX - pivotX
+        val rightBorder = width * scaleX - (width + leftBorder) // Scaled width - width - border
+        val topBorder = pivotY * scaleY - pivotY
+        val bottomBorder = height * scaleY - (height + topBorder)
+        translationX -= distanceX
+        translationY -= distanceY
+//
+//        if (translationX - leftBorder <= distanceX
+//            && -translationX + distanceX <= width + rightBorder)
+//            translationX -= distanceX
+//        if (translationY - topBorder <= distanceY
+//            && -translationY + distanceY <= height + bottomBorder)
+//            translationY -= distanceY
+    }
+    private fun getPaddings() : FloatArray {
+        val leftPadding = pivotX * scaleX - pivotX
+        val rightPadding = width * scaleX - (width + leftPadding) // Scaled width - width - border
+        val topPadding = pivotY * scaleY - pivotY
+        val bottomPadding = height * scaleY - (height + topPadding)
+        return floatArrayOf(leftPadding, topPadding, rightPadding, bottomPadding)
     }
 }

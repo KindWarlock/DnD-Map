@@ -9,10 +9,29 @@
 
   <androidx.fragment.app.FragmentContainerView
       android:layout_width="match_parent"
-      android:layout_height="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
       android:name="com.example.dndmap.MapFragment"
       android:id="@+id/map">
 
   </androidx.fragment.app.FragmentContainerView>
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="100dp"
+      android:orientation="horizontal">
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:id="@+id/btnEditGrid"
+        android:layout_weight="1"/>
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:id="@+id/btnChangeBackground"
+        android:backgroundTint="@color/teal_200"
+        android:layout_weight="1"/>
+  </LinearLayout>
+
+
 
 </LinearLayout>
