@@ -32,11 +32,12 @@ class MapGridView @JvmOverloads constructor(context: Context,
     private var squareSize: Int
 
     private val paint = Paint()
-    private val paintFog = Paint()
+    val paintFog = Paint()
     private val fog = arrayListOf<Pos>() //TODO to viewModel?
     private val characters = mutableListOf<Character>()
     private lateinit var viewCanvas: Canvas
 
+    var characterDrag = -1
     enum class FogMode {
         DRAWING,
         ERASING,
@@ -87,31 +88,24 @@ class MapGridView @JvmOverloads constructor(context: Context,
 
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
-//        viewCanvas = canvas!!
-        // TODO: oh, really?
-//        if (canvas == null) {
-//            return
-//        }
-//        mapSize.x = ceil(width/ squareSize.toDouble()).toInt()
-//        mapSize.y = ceil(height/ squareSize.toFloat()).toInt()
-//
-//
-//        for (x in 0 .. mapSize.x) {
-//            val posX = squareSize * x.toFloat()
-//            val posY = mapSize.y * squareSize.toFloat()
-//            canvas.drawLine(posX, 0F, posX, posY, paint)
-//        }
-//        for (y in 0 .. mapSize.y) {
-//            val posY = squareSize * y.toFloat()
-//            val posX = mapSize.x * squareSize.toFloat()
-//            canvas.drawLine(0F, posY, posX, posY, paint)
-//        }
+        mapSize.x = ceil(width/ squareSize.toDouble()).toInt()
+        mapSize.y = ceil(height/ squareSize.toFloat()).toInt()
 
+
+        for (x in 0 .. mapSize.x) {
+            val posX = squareSize * x.toFloat()
+            val posY = mapSize.y * squareSize.toFloat()
+            canvas?.drawLine(posX, 0F, posX, posY, paint)
+        }
+        for (y in 0 .. mapSize.y) {
+            val posY = squareSize * y.toFloat()
+            val posX = mapSize.x * squareSize.toFloat()
+            canvas?.drawLine(0F, posY, posX, posY, paint)
+        }
         Log.d(TAG, "$fog")
     }
 
     override fun onDrawForeground(canvas: Canvas?) {
-        // TODO: drawgrid
         if (canvas == null) {
             return
         }
@@ -121,40 +115,26 @@ class MapGridView @JvmOverloads constructor(context: Context,
             Log.d(TAG, "$fog")
             drawFog(pos)
         }
-        mapSize.x = ceil(width/ squareSize.toDouble()).toInt()
-        mapSize.y = ceil(height/ squareSize.toFloat()).toInt()
-
-
-        for (x in 0 .. mapSize.x) {
-            val posX = squareSize * x.toFloat()
-            val posY = mapSize.y * squareSize.toFloat()
-            canvas.drawLine(posX, 0F, posX, posY, paint)
-        }
-        for (y in 0 .. mapSize.y) {
-            val posY = squareSize * y.toFloat()
-            val posX = mapSize.x * squareSize.toFloat()
-            canvas.drawLine(0F, posY, posX, posY, paint)
-        }
     }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = (parent as View).width * 4
         val height = (parent as View).height * 4
-//        val width = 100
-//        val height = 100
         setMeasuredDimension(width, height)
         for (child in children) {
+            widthMeasureSpec
             measureChild(child, widthMeasureSpec, heightMeasureSpec)
         }
-        pivotX = 0F
-        pivotY = 0F
-        translationY = -(height / 2).toFloat()
-        translationX = -(width / 2).toFloat()
+        translationY = if (translationY == 0F) -(height / 2).toFloat() else translationY
+        translationX = if (translationX == 0F) -(width / 2).toFloat() else translationX
     }
 
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         for (child in children) {
-            child.layout(0, 0, child.measuredWidth, child.measuredHeight)
+            child.layout(0,
+                0,
+                child.measuredWidth,
+                child.measuredHeight)
         }
     }
 
@@ -193,10 +173,9 @@ class MapGridView @JvmOverloads constructor(context: Context,
         return false
     }
     fun scaleBegin(focusX: Float, focusY: Float) {
-        // TODO: fix pivot on scaled parent
         val actualPivot = PointF(
-            (focusX - mParent.translationX - translationX + pivotX * (scaleX - 1)) / scaleX,
-            (focusY - mParent.translationY - translationY + pivotY * (scaleY - 1)) / scaleY,
+            (focusX - translationX + pivotX * (scaleX - 1)) / scaleX,
+            (focusY - translationY + pivotY * (scaleY - 1)) / scaleY,
         )
         translationX -= (pivotX - actualPivot.x) * (scaleX - 1)
         translationY -= (pivotY - actualPivot.y) * (scaleY - 1)
@@ -213,46 +192,47 @@ class MapGridView @JvmOverloads constructor(context: Context,
         translationY -= distanceY
     }
 
-    fun editCharacters(newCharacters : MutableList<Character>) {
+    fun editCharacters(newCharacters : MutableList<Character>, x: Float = 0F, y: Float = 0F) {
         if (newCharacters == characters) {
             Log.d(TAG, "No new characters")
             return
         }
-        // TODO: find removed changed and added characters
-        val removed = characters.minus(newCharacters.toSet()).toMutableList()
-        val added = newCharacters.minus(characters.toSet()).toMutableList()
-        addCharacters(added)
-        removeCharacters(removed)
+        val removed = characters.minus(newCharacters.toSet())
+        val added = newCharacters.minus(characters.toSet())
+        Log.d(TAG, "$added")
+        if (added.isNotEmpty()) {
+            addCharacter(added[0], x, y)
+        }
+        if (removed.isNotEmpty()) {
+            removeCharacter(removed[0])
+        }
     }
 
-    private fun removeCharacters(removed: MutableList<Character>) {
-        characters.removeAll(removed.toSet())
+    private fun removeCharacter(removed: Character) {
+        characters.remove(removed)
         for (view in children) {
-            for (r in removed) {
-                if (view.id == r.id)
-                    removeView(view)
-            }
+            if (view.id == removed.id)
+                removeView(view)
         }
     }
 
-    private fun addCharacters(added: MutableList<Character>) {
-        for (a in added) {
-            a.pos = coords2pos((-mParent.translationX + mParent.pivotX * mParent.scaleX - mParent.pivotX) / mParent.scaleX,
-                (-mParent.translationY + mParent.pivotY * mParent.scaleY - mParent.pivotY) / mParent.scaleY)
-            val characterView = ImageView(context)
-            characterView.layoutParams = LayoutParams(squareSize, squareSize)
-            characterView.id = a.id
-            characterView.x = (a.pos.x * squareSize).toFloat()
-            characterView.y = (a.pos.y * squareSize).toFloat()
-            characterView.pivotX = width / 2F
-            characterView.pivotY = height / 2F
-            this.addView(characterView)
-            Picasso.get().load(a.image).fit().centerCrop().into(characterView)
-            invalidate()
-            Log.d(TAG, "Added view")
-        }
-        characters.addAll(added)
-        Log.d(TAG, "$characters")
+    private fun addCharacter(c: Character, x: Float, y: Float) {
+        c.pos = coords2pos(x, y)
+
+        val characterView = ImageView(context)
+        characterView.layoutParams = LayoutParams(squareSize - paint.strokeWidth.toInt(),
+            squareSize - paint.strokeWidth.toInt())
+        characterView.id = c.id
+        characterView.x = (c.pos.x * squareSize).toFloat() + (paint.strokeWidth / 2)
+        characterView.y = (c.pos.y * squareSize).toFloat() + (paint.strokeWidth / 2)
+        characterView.pivotX = squareSize / 2F
+        characterView.pivotY = squareSize / 2F
+        this.addView(characterView)
+
+        Picasso.get().load(c.image).fit().centerCrop().into(characterView)
+        invalidate()
+
+        characters.add(c)
     }
     fun getCharacterIndex (x: Float, y: Float) : Int {
         val pos = coords2pos(x, y)
@@ -263,8 +243,27 @@ class MapGridView @JvmOverloads constructor(context: Context,
         }
         return -1
     }
-    fun moveCharacter(idx: Int, distanceX: Float, distanceY: Float) {
-        val newPos = coords2pos(x, y)
-        characters[idx].pos = newPos
+    fun grabCharacer (idx: Int) {
+        if (idx == -1)
+            return
+        characterDrag = idx
+        val c = children.find {it.id == characters[characterDrag].id}!!
+        c.scaleY = 1.2F
+        c.scaleX = 1.2F
+    }
+    fun moveCharacter(distanceX: Float, distanceY: Float) {
+//        characters[characterDrag] += distanceX
+        val c = children.find {it.id == characters[characterDrag].id}!!
+        c.x -= distanceX / scaleX
+        c.y -= distanceY / scaleY
+    }
+    fun placeCharacter(x: Float, y: Float) {
+        val c = children.find {it.id == characters[characterDrag].id}!!
+        c.scaleY = 1F
+        c.scaleX = 1F
+        characters[characterDrag].pos = coords2pos(x, y)
+        c.x = (coords2pos(x, y).x * squareSize).toFloat() + (paint.strokeWidth / 2)
+        c.y = (coords2pos(x, y).y * squareSize).toFloat() + (paint.strokeWidth / 2)
+        characterDrag = -1
     }
 }

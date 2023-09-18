@@ -53,6 +53,7 @@ class MapFragment : Fragment(),
     var mBackgroundImage : Uri? = null
     var editGrid = false
     var scrollMode = ScrollMode.SCROLL
+
     private val scaleGestureDetector by lazy {
         activity?.let {
             ScaleGestureDetector(it, object : ScaleGestureDetector.OnScaleGestureListener {
@@ -109,7 +110,8 @@ class MapFragment : Fragment(),
 //                    Log.d("TAG", "Scale begin")
                     scaling = true
                     if (editGrid) {
-                        binding.grid.scaleBegin(detector.focusX, detector.focusY)
+                        val coords = toGridCoords(detector.focusX, detector.focusY)
+                        binding.grid.scaleBegin(coords[0], coords[1])
                         return true
                     }
                     binding.trueRoot.run {
@@ -147,12 +149,17 @@ class MapFragment : Fragment(),
 //        Picasso.get().load(R.drawable.mapexample).fit().centerInside().into(binding.backgroundImage)
 
         binding.root.setOnTouchListener { view, event ->
-            if (event.action == MotionEvent.ACTION_MOVE && (fogMode != FogMode.NONE)) {
+            if (event.action == MotionEvent.ACTION_MOVE
+                && ((fogMode != FogMode.NONE) || (binding.grid.characterDrag != -1))) {
                 val cancel = MotionEvent.obtain(event)
                 cancel.action = MotionEvent.ACTION_CANCEL
                 mDetector.onTouchEvent(cancel)
             }
             if (event.action == MotionEvent.ACTION_UP) {
+                if (binding.grid.characterDrag != -1) {
+                    val coords = toGridCoords(event.x, event.y)
+                    binding.grid.placeCharacter(coords[0], coords[1])
+                }
                 fogMode = FogMode.NONE
                 scaling = false
             }
@@ -167,21 +174,29 @@ class MapFragment : Fragment(),
         }
 //        viewModel.changeBackgroundImage(R.drawable.mapexample)
         viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 viewModel.uiState.collect {data ->
                     Log.d("TAG", "data collected")
                     editGrid = data.editGrid
                     if (data.backgroundImage != mBackgroundImage) {
                         Picasso.get().load(data.backgroundImage).fit().centerInside().into(binding.backgroundImage)
-                        // TODO: without variable
                         mBackgroundImage = data.backgroundImage
                         binding.trueRoot.translationX = 0F
                         binding.trueRoot.translationY = 0F
                         changeScales(1F)
                     }
                     scrollMode = data.scrollMode
+                    if (scrollMode == ScrollMode.CHARACTER) {
+                        binding.grid.paintFog.alpha = 180
+                        binding.grid.invalidate()
+                    } else {
+                        binding.grid.paintFog.alpha = 255
+                        binding.grid.invalidate()
+                    }
 //                    Log.d("TAG", "${data}")
-                    binding.grid.editCharacters(data.characters)
+                    val coords = toGridCoords(requireActivity().window.decorView.width / 2F,
+                        requireActivity().window.decorView.height / 2F)
+                    binding.grid.editCharacters(data.characters, coords[0], coords[1])
                 }
             }
         }
@@ -204,7 +219,9 @@ class MapFragment : Fragment(),
                 FogMode.DRAWING
             }
         } else if (scrollMode == ScrollMode.CHARACTER) {
-
+            val coords = toGridCoords(event.x, event.y)
+            val idx = binding.grid.getCharacterIndex(coords[0], coords[1])
+            binding.grid.grabCharacer(idx)
         }
 //        drawFog(event.x, event.y)
     }
@@ -230,11 +247,19 @@ class MapFragment : Fragment(),
                 distanceY / binding.trueRoot.scaleY)
             return true
         }
-        if (fogMode == FogMode.NONE) {
-            scroll(distanceX, distanceY)
-        } else {
-            drawFog(event1.x, event1.y)
+
+        if (scrollMode == ScrollMode.FOG) {
+            if (fogMode != FogMode.NONE) {
+                drawFog(event1.x, event1.y)
+                return true
+            }
+        } else if (scrollMode == ScrollMode.CHARACTER) {
+            if (binding.grid.characterDrag != -1) {
+                binding.grid.moveCharacter(distanceX / binding.trueRoot.scaleX , distanceY / binding.trueRoot.scaleY)
+                return true
+            }
         }
+        scroll(distanceX, distanceY)
         return true
     }
 
@@ -266,20 +291,18 @@ class MapFragment : Fragment(),
     }
 
     fun drawFog(x: Float, y: Float) {
-//        binding.grid.addFog((x + binding.hScroll.scrollX) / mScaleFactor,
-//            (y + binding.vScroll.scrollY) / mScaleFactor,
-//            mScaleFactor)
-        val paddings = getPaddings()
-        val newX = (x - binding.trueRoot.translationX + paddings[0]) / binding.trueRoot.scaleX
-        val newY = (y - binding.trueRoot.translationY + paddings[1]) / binding.trueRoot.scaleY
+        val coords = toGridCoords(x, y)
         if (fogMode == FogMode.DRAWING){
-            binding.grid.addFog(newX, newY)}
+            binding.grid.addFog(coords[0], coords[1])}
         else
-            binding.grid.removeFog(newX, newY)
+            binding.grid.removeFog(coords[0], coords[1])
         binding.grid.invalidate()
     }
 
     private fun getPaddings() : FloatArray {
+        if (binding.backgroundImage.drawable == null) {
+            return floatArrayOf(0F, 0F, 0F, 0F)
+        }
         val imageWidth = binding.backgroundImage.drawable.intrinsicWidth
         val imageHeight = binding.backgroundImage.drawable.intrinsicHeight
         binding.trueRoot.run {
@@ -296,10 +319,12 @@ class MapFragment : Fragment(),
             scaleY = newScale
         }
     }
-    // TODO: when to create an object?
-    fun addCharacter() {
 
-//        binding.grid.addCharacter("test", Pos(1,1), )
+    fun toGridCoords(x: Float, y: Float) : FloatArray{
+        val paddings = getPaddings()
+        val gridX = (x - binding.trueRoot.translationX + paddings[0]) / binding.trueRoot.scaleX
+        val gridY = (y - binding.trueRoot.translationY + paddings[1]) / binding.trueRoot.scaleY
+        return floatArrayOf(gridX, gridY)
     }
 }
 

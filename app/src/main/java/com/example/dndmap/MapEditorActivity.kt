@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.util.TypedValue
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +18,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.dndmap.data.Pos
 import com.example.dndmap.databinding.ActivityMapEditorBinding
 import com.example.dndmap.ui.MapViewModel
+import com.example.dndmap.ui.ScrollMode
 import com.squareup.picasso.Picasso
 import kotlinx.coroutines.launch
 
@@ -54,6 +56,37 @@ class MapEditorActivity : AppCompatActivity() {
         }
         binding.btnAddCharacter.setOnClickListener {
             getCharacterImage.launch("image/*")
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect {data ->
+//                    Log.d("TAG", "data collected")
+//                    binding.btnEditGrid.text = if (data.editGrid) "Grid mode" else "Whole"
+//                    binding.btnScrollMode.text = data.scrollMode.toString()
+                    if (data.editGrid) {
+                        binding.btnEditGrid.background = getDrawable(R.drawable.grid)
+                    } else {
+                        binding.btnEditGrid.background = getDrawable(R.drawable.background)
+                    }
+
+                    val dip = if (data.scrollMode == ScrollMode.SCROLL) 25F else 40F
+                    val r = resources
+                    val px = TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_DIP,
+                        dip,
+                        r.displayMetrics
+                    )
+                    binding.btnScrollMode.layoutParams.height = px.toInt()
+
+
+                    binding.btnScrollMode.background = when (data.scrollMode) {
+                        ScrollMode.SCROLL -> getDrawable(R.drawable.scroll)
+                        ScrollMode.FOG -> getDrawable(R.drawable.fog)
+                        ScrollMode.CHARACTER -> getDrawable(R.drawable.edit_character)
+
+                    }
+                }
+            }
         }
     }
 }
