@@ -2,6 +2,7 @@ package com.example.dndmap
 
 
 import android.annotation.SuppressLint
+import android.graphics.Matrix
 import android.graphics.PointF
 import android.net.Uri
 import android.os.Build
@@ -145,26 +146,30 @@ class MapFragment : Fragment(),
         }
         mDetector = GestureDetectorCompat(requireContext(), this)
 //        Picasso.get().load(R.drawable.mapexample).fit().centerInside().into(binding.backgroundImage)
-
-        binding.root.setOnTouchListener { view, event ->
-            if (event.action == MotionEvent.ACTION_MOVE && (fogMode != FogMode.NONE)) {
-                val cancel = MotionEvent.obtain(event)
-                cancel.action = MotionEvent.ACTION_CANCEL
-                mDetector.onTouchEvent(cancel)
-            }
-            if (event.action == MotionEvent.ACTION_UP) {
-                fogMode = FogMode.NONE
-                scaling = false
-            }
-            if (scaling || event.pointerCount > 1) {
-                scaleGestureDetector!!.onTouchEvent(event)
-            } else
-            if (mDetector.onTouchEvent(event)) {
-                true
-            } else {
-                binding.root.onTouchEvent(event)
-            }
-        }
+//        binding.root.setOnTouchListener { view, event ->
+//            Log.d("TAG", "$event")
+//            if (binding.grid.fogMode != MapGridView.FogMode.NONE) {
+//                binding.grid.dispatchTouchEvent(event)
+//
+//                val cancel = MotionEvent.obtain(event)
+//                cancel.action = MotionEvent.ACTION_CANCEL
+//                return@setOnTouchListener mDetector.onTouchEvent(cancel)
+//            }
+//            if (event.action == MotionEvent.ACTION_MOVE && (fogMode != FogMode.NONE)) {
+//                val cancel = MotionEvent.obtain(event)
+//                cancel.action = MotionEvent.ACTION_CANCEL
+//                mDetector.onTouchEvent(cancel)
+//            }
+//            if (event.action == MotionEvent.ACTION_UP) {
+//                fogMode = FogMode.NONE
+//                scaling = false
+//            }
+//            if (scaling || event.pointerCount > 1) {
+//                scaleGestureDetector!!.onTouchEvent(event)
+//            } else
+//                mDetector.onTouchEvent(event)
+//            true
+//        }
 //        viewModel.changeBackgroundImage(R.drawable.mapexample)
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -173,7 +178,6 @@ class MapFragment : Fragment(),
                     editGrid = data.editGrid
                     if (data.backgroundImage != mBackgroundImage) {
                         Picasso.get().load(data.backgroundImage).fit().centerInside().into(binding.backgroundImage)
-                        // TODO: without variable
                         mBackgroundImage = data.backgroundImage
                         binding.trueRoot.translationX = 0F
                         binding.trueRoot.translationY = 0F
@@ -197,16 +201,24 @@ class MapFragment : Fragment(),
         // TODO: fun getTrueXY
         val newX = (event.x - binding.trueRoot.translationX + paddings[0]) / binding.trueRoot.scaleX
         val newY = (event.y - binding.trueRoot.translationY + paddings[1]) / binding.trueRoot.scaleY
-        if (scrollMode == ScrollMode.FOG) {
-            fogMode = if (binding.grid.checkFog(newX, newY))
-                FogMode.ERASING
-            else {
-                FogMode.DRAWING
-            }
-        } else if (scrollMode == ScrollMode.CHARACTER) {
+//        if (scrollMode == ScrollMode.FOG) {
+//            fogMode = if (binding.grid.checkFog(newX, newY))
+//                FogMode.ERASING
+//            else {
+//                FogMode.DRAWING
+//            }
+//        } else if (scrollMode == ScrollMode.CHARACTER) {
+//
+//        }
+        binding.grid.fogMode =  MapGridView.FogMode.INTERACTING
+//        val cancel = MotionEvent.obtain(event)
+//        cancel.action = MotionEvent.ACTION_CANCEL
+//        mDetector.onTouchEvent(cancel)
 
-        }
-//        drawFog(event.x, event.y)
+        event.action = MotionEvent.ACTION_DOWN
+        binding.grid.dispatchTouchEvent(event)
+
+    //        drawFog(event.x, event.y)
     }
 
     override fun onShowPress(event: MotionEvent) {
@@ -216,7 +228,6 @@ class MapFragment : Fragment(),
     override fun onSingleTapUp(event: MotionEvent): Boolean {
         return true
     }
-
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onScroll(event0: MotionEvent,
                           event1: MotionEvent,
@@ -255,6 +266,7 @@ class MapFragment : Fragment(),
             val rightBorder = imageWidth * scaleX - (imageWidth + leftBorder) // Scaled width - width - border
             val topBorder = pivotY * scaleY - pivotY
             val bottomBorder = imageHeight * scaleY - (imageHeight + topBorder)
+
 
             if (translationX - leftBorder <= distanceX
                 && -translationX + distanceX <= imageWidth - (requireActivity().window.decorView.width) + rightBorder)

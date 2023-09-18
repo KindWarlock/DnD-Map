@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="1300dp"
     android:layout_height="1300dp">
-    <FrameLayout
+    <com.example.dndmap.views.MapView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:id="@+id/trueRoot">
@@ -22,6 +22,6 @@
             android:id="@+id/grid"
             android:background="@android:color/transparent">
         </com.example.dndmap.views.MapGridView>
-    </FrameLayout>
+    </com.example.dndmap.views.MapView>
 
 </LinearLayout>

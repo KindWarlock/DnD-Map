@@ -37,17 +37,65 @@ class MapGridView @JvmOverloads constructor(context: Context,
     private val characters = mutableListOf<Character>()
     private lateinit var viewCanvas: Canvas
 
+    // istg it's the only way
+    private var downX = 0F
+    private var downY = 0F
+
     enum class FogMode {
         DRAWING,
         ERASING,
         NONE,
         INTERACTING
     }
-    var fogMode = FogMode.DRAWING
-    // TODO: scale as view method
+    var fogMode = FogMode.NONE
+
     lateinit var mDetector: GestureDetectorCompat
     private lateinit var mParent : View
 
+    inner class MyGestureListener : GestureDetector.SimpleOnGestureListener() {
+
+        override fun onDown(event: MotionEvent): Boolean {
+//            Log.d(TAG, "onDown")
+            downX = event.x
+            downY = event.y
+
+            if (fogMode == FogMode.INTERACTING) {
+                fogMode = if (checkFog(event.x, event.y)) FogMode.ERASING
+                    else FogMode.DRAWING
+            }
+            return true
+        }
+
+        override fun onScroll(
+            event1: MotionEvent,
+            event2: MotionEvent,
+            velocityX: Float,
+            velocityY: Float
+        ): Boolean {
+//            Log.d(TAG, "onScroll")
+//            Log.d(TAG, "$event1, $event2")
+//            if (fogMode == FogMode.NONE) {
+//                return false
+//            }
+            if (fogMode == FogMode.NONE) {
+                (parent as MapView).wholeMode = true
+                return false
+            }
+            if (fogMode == FogMode.DRAWING) {
+                addFog(event2.x, event2.y)
+            }
+            else if (fogMode == FogMode.ERASING)
+                removeFog(event2.x, event2.y)
+            invalidate()
+            return true
+        }
+
+        override fun onLongPress(event: MotionEvent) {
+//            Log.d(TAG, "$event")
+            fogMode = if (checkFog(event.x, event.y)) FogMode.ERASING
+                else FogMode.DRAWING
+        }
+    }
     var scaleMode = false
     init {
         setWillNotDraw(false)
@@ -83,31 +131,31 @@ class MapGridView @JvmOverloads constructor(context: Context,
         paintFog.color = Color.BLACK
         paintFog.isAntiAlias = true
         paintFog.strokeWidth = 0F
+        mDetector = GestureDetectorCompat(context, MyGestureListener())
+    }
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+//        Log.d(TAG, "$event")
+
+        if (event.action == MotionEvent.ACTION_MOVE && (fogMode != FogMode.NONE)) {
+            val cancel = MotionEvent.obtain(event)
+            cancel.action = MotionEvent.ACTION_CANCEL
+            mDetector.onTouchEvent(cancel)
+        }
+        if (event.action == MotionEvent.ACTION_UP && event.pointerCount == 1) {
+            fogMode = FogMode.NONE
+        }
+        return if (mDetector.onTouchEvent(event))
+            true
+        else
+            super.onTouchEvent(event)
+//        mDetector.onTouchEvent(event)
+//        return super.onTouchEvent(event)
     }
 
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
-//        viewCanvas = canvas!!
-        // TODO: oh, really?
-//        if (canvas == null) {
-//            return
-//        }
-//        mapSize.x = ceil(width/ squareSize.toDouble()).toInt()
-//        mapSize.y = ceil(height/ squareSize.toFloat()).toInt()
-//
-//
-//        for (x in 0 .. mapSize.x) {
-//            val posX = squareSize * x.toFloat()
-//            val posY = mapSize.y * squareSize.toFloat()
-//            canvas.drawLine(posX, 0F, posX, posY, paint)
-//        }
-//        for (y in 0 .. mapSize.y) {
-//            val posY = squareSize * y.toFloat()
-//            val posX = mapSize.x * squareSize.toFloat()
-//            canvas.drawLine(0F, posY, posX, posY, paint)
-//        }
 
-        Log.d(TAG, "$fog")
+//        Log.d(TAG, "$fog")
     }
 
     override fun onDrawForeground(canvas: Canvas?) {
@@ -118,7 +166,6 @@ class MapGridView @JvmOverloads constructor(context: Context,
         super.onDrawForeground(canvas)
         viewCanvas = canvas
         for (pos in fog) {
-            Log.d(TAG, "$fog")
             drawFog(pos)
         }
         mapSize.x = ceil(width/ squareSize.toDouble()).toInt()
@@ -178,8 +225,9 @@ class MapGridView @JvmOverloads constructor(context: Context,
 
     private fun coords2pos(x: Float, y: Float) : Pos {
         val paddings = getPaddings()
-        val posX = ((x - translationX + paddings[0]) / scaleX / squareSize ).toInt()
-        val posY = ((y - translationY + paddings[1]) / scaleY / squareSize ).toInt()
+
+        val posX = ((x - mParent.translationX) / squareSize ).toInt()
+        val posY = ((y - mParent.translationY) / squareSize ).toInt()
         return Pos(posX, posY)
     }
 
