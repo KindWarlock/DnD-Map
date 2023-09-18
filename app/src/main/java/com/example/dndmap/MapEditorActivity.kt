@@ -11,8 +11,14 @@ import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.dndmap.data.Pos
 import com.example.dndmap.databinding.ActivityMapEditorBinding
 import com.example.dndmap.ui.MapViewModel
+import com.squareup.picasso.Picasso
+import kotlinx.coroutines.launch
 
 
 class MapEditorActivity : AppCompatActivity() {
@@ -21,8 +27,13 @@ class MapEditorActivity : AppCompatActivity() {
     private val binding get() = _binding!!
     private val viewModel: MapViewModel by viewModels()
 
-    val getImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+    // TODO: GALLERY_REQUEST
+    private val getBackgroundImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         viewModel.changeBackgroundImage(uri!!)
+    }
+
+    private val getCharacterImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        viewModel.addCharacter(uri!!)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,10 +44,16 @@ class MapEditorActivity : AppCompatActivity() {
 
         viewModel.changeBackgroundImage(Uri.parse("android.resource://com.example.dndmap/${R.drawable.mapexample}"))
         binding.btnEditGrid.setOnClickListener {
-            viewModel.toggleGridEdit()
+            viewModel.toggleEditGrid()
+        }
+        binding.btnScrollMode.setOnClickListener {
+            viewModel.toggleScrollMode()
         }
         binding.btnChangeBackground.setOnClickListener {
-            getImage.launch("image/*")
+            getBackgroundImage.launch("image/*")
+        }
+        binding.btnAddCharacter.setOnClickListener {
+            getCharacterImage.launch("image/*")
         }
     }
 }

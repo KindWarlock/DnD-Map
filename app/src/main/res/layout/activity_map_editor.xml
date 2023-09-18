@@ -21,14 +21,29 @@
       android:orientation="horizontal">
     <Button
         android:layout_width="match_parent"
-        android:layout_height="100dp"
+        android:layout_height="match_parent"
         android:id="@+id/btnEditGrid"
+        android:text="Edit grid"
         android:layout_weight="1"/>
     <Button
         android:layout_width="match_parent"
-        android:layout_height="100dp"
+        android:layout_height="match_parent"
+        android:id="@+id/btnScrollMode"
+        android:text="Scroll"
+        android:layout_weight="1"/>
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:id="@+id/btnChangeBackground"
         android:backgroundTint="@color/teal_200"
+        android:text="Change background"
+        android:layout_weight="1"/>
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:id="@+id/btnAddCharacter"
+        android:backgroundTint="@color/black"
+        android:text="Add character"
         android:layout_weight="1"/>
   </LinearLayout>
 

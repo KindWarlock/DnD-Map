@@ -18,8 +18,11 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.example.dndmap.data.Pos
 import com.example.dndmap.databinding.FragmentMapBinding
 import com.example.dndmap.ui.MapViewModel
+import com.example.dndmap.ui.ScrollMode
+import com.example.dndmap.views.MapGridView
 import com.squareup.picasso.Picasso
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -49,17 +52,17 @@ class MapFragment : Fragment(),
 
     var mBackgroundImage : Uri? = null
     var editGrid = false
+    var scrollMode = ScrollMode.SCROLL
     private val scaleGestureDetector by lazy {
         activity?.let {
             ScaleGestureDetector(it, object : ScaleGestureDetector.OnScaleGestureListener {
-
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
 //                    Log.d("TAG", "Scale ")
                     if (editGrid) {
                         binding.grid.scale(detector.scaleFactor)
                         return true
                     }
-                    // TODO: change pivot near borders with translation
+                    // TODO: fix white borders
                     binding.trueRoot.run {
                         val paddings = getPaddings()
                         val newScale = scaleX * detector.scaleFactor
@@ -149,7 +152,6 @@ class MapFragment : Fragment(),
                 cancel.action = MotionEvent.ACTION_CANCEL
                 mDetector.onTouchEvent(cancel)
             }
-
             if (event.action == MotionEvent.ACTION_UP) {
                 fogMode = FogMode.NONE
                 scaling = false
@@ -167,6 +169,7 @@ class MapFragment : Fragment(),
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.uiState.collect {data ->
+                    Log.d("TAG", "data collected")
                     editGrid = data.editGrid
                     if (data.backgroundImage != mBackgroundImage) {
                         Picasso.get().load(data.backgroundImage).fit().centerInside().into(binding.backgroundImage)
@@ -176,31 +179,33 @@ class MapFragment : Fragment(),
                         binding.trueRoot.translationY = 0F
                         changeScales(1F)
                     }
+                    scrollMode = data.scrollMode
+//                    Log.d("TAG", "${data}")
+                    binding.grid.editCharacters(data.characters)
                 }
             }
         }
         return binding.root
     }
 
-
     override fun onDown(event: MotionEvent): Boolean {
         return true
     }
 
     override fun onLongPress(event: MotionEvent) {
-
         val paddings = getPaddings()
-        Log.d("TAG", "Long press")
         // TODO: fun getTrueXY
         val newX = (event.x - binding.trueRoot.translationX + paddings[0]) / binding.trueRoot.scaleX
         val newY = (event.y - binding.trueRoot.translationY + paddings[1]) / binding.trueRoot.scaleY
-        fogMode = if (binding.grid.checkFog(newX, newY))
-            FogMode.ERASING
-        else{
-            Log.d("TAG", "Drawing")
-            FogMode.DRAWING
+        if (scrollMode == ScrollMode.FOG) {
+            fogMode = if (binding.grid.checkFog(newX, newY))
+                FogMode.ERASING
+            else {
+                FogMode.DRAWING
+            }
+        } else if (scrollMode == ScrollMode.CHARACTER) {
+
         }
-        // TODO draw on long press
 //        drawFog(event.x, event.y)
     }
 
@@ -239,7 +244,6 @@ class MapFragment : Fragment(),
                          distanceY: Float): Boolean{
         return true
     }
-
     @SuppressLint("InternalInsetResource")
     @RequiresApi(Build.VERSION_CODES.R)
     fun scroll(distanceX: Float, distanceY: Float) {
@@ -247,26 +251,18 @@ class MapFragment : Fragment(),
             val imageWidth = binding.backgroundImage.drawable.intrinsicWidth
             val imageHeight = binding.backgroundImage.drawable.intrinsicHeight
 
-
-//            var navigationBarHeight = 0
-//            var resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-//            if (resourceId > 0) {
-//                navigationBarHeight = resources.getDimensionPixelSize(resourceId)
-//            }
-
             val leftBorder = pivotX * scaleX - pivotX
             val rightBorder = imageWidth * scaleX - (imageWidth + leftBorder) // Scaled width - width - border
             val topBorder = pivotY * scaleY - pivotY
             val bottomBorder = imageHeight * scaleY - (imageHeight + topBorder)
+
             if (translationX - leftBorder <= distanceX
                 && -translationX + distanceX <= imageWidth - (requireActivity().window.decorView.width) + rightBorder)
                 translationX -= distanceX
-            // TODO: addressing to a parent view and fragment's id is bruh
             if (translationY - topBorder <= distanceY
                 && -translationY + distanceY <= imageHeight - (requireActivity().findViewById<FragmentContainerView>(R.id.map).height) + bottomBorder)
                 translationY -= distanceY
         }
-//        Log.d("tag", "Scrolling")
     }
 
     fun drawFog(x: Float, y: Float) {
@@ -294,12 +290,16 @@ class MapFragment : Fragment(),
             return floatArrayOf(leftPadding, topPadding, rightPadding, bottomPadding)
         }
     }
-
     private fun changeScales(newScale : Float) {
         binding.trueRoot.run {
             scaleX = newScale
             scaleY = newScale
         }
+    }
+    // TODO: when to create an object?
+    fun addCharacter() {
+
+//        binding.grid.addCharacter("test", Pos(1,1), )
     }
 }
 
